@@ -1,0 +1,118 @@
+{
+  "name": "PM Maintenance Intake - Vapi to Sheets + On-call Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vapi-maintenance-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1f0c6d2-0001-4a51-9a10-000000000001",
+      "name": "Vapi tool call",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "vapi-maintenance-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Vapi sends: { message: { type: 'tool-calls', toolCallList: [...], call: {...} } }\nconst msg = $input.first().json.body.message;\nconst toolCall = msg.toolCallList[0];\nconst args = typeof toolCall.function.arguments === 'string'\n  ? JSON.parse(toolCall.function.arguments)\n  : toolCall.function.arguments;\n\nconst ticketId = 'MR-' + Date.now().toString(36).toUpperCase();\n\nreturn [{\n  json: {\n    ticket_id: ticketId,\n    tool_call_id: toolCall.id,\n    received_at: new Date().toISOString(),\n    caller_id: (msg.call && msg.call.customer && msg.call.customer.number) || '',\n    tenant_name: args.tenant_name || '',\n    callback_number: args.callback_number || '',\n    property_address: args.property_address || '',\n    unit: args.unit || '',\n    issue_category: args.issue_category || 'other',\n    issue_description: args.issue_description || '',\n    urgency: args.urgency || 'routine',\n    permission_to_enter: args.permission_to_enter === true ? 'yes' : 'no',\n    pets_on_site: args.pets_on_site || '',\n    preferred_time: args.preferred_time || '',\n    status: 'new'\n  }\n}];"
+      },
+      "id": "a1f0c6d2-0002-4a51-9a10-000000000002",
+      "name": "Parse request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Requests",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "a1f0c6d2-0003-4a51-9a10-000000000003",
+      "name": "Log to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ results: [{ toolCallId: $('Parse request').first().json.tool_call_id, result: 'Request logged. Ticket number ' + $('Parse request').first().json.ticket_id.split('').join(' ') + '. Urgency: ' + $('Parse request').first().json.urgency + '.' }] }) }}",
+        "options": {}
+      },
+      "id": "a1f0c6d2-0004-4a51-9a10-000000000004",
+      "name": "Reply to Vapi",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Parse request').first().json.urgency }}",
+              "value2": "emergency"
+            }
+          ]
+        }
+      },
+      "id": "a1f0c6d2-0005-4a51-9a10-000000000005",
+      "name": "Emergency?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "from": "+10000000000",
+        "to": "+10000000000",
+        "message": "={{ '🚨 EMERGENCY ' + $('Parse request').first().json.ticket_id + '\\n' + $('Parse request').first().json.issue_category.toUpperCase() + ': ' + $('Parse request').first().json.issue_description + '\\n' + $('Parse request').first().json.property_address + ' ' + $('Parse request').first().json.unit + '\\nTenant: ' + $('Parse request').first().json.tenant_name + ' ' + $('Parse request').first().json.callback_number }}",
+        "options": {}
+      },
+      "id": "a1f0c6d2-0006-4a51-9a10-000000000006",
+      "name": "SMS on-call technician",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [960, 400]
+    }
+  ],
+  "connections": {
+    "Vapi tool call": {
+      "main": [[{ "node": "Parse request", "type": "main", "index": 0 }]]
+    },
+    "Parse request": {
+      "main": [[{ "node": "Log to Google Sheet", "type": "main", "index": 0 }]]
+    },
+    "Log to Google Sheet": {
+      "main": [[
+        { "node": "Reply to Vapi", "type": "main", "index": 0 },
+        { "node": "Emergency?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Emergency?": {
+      "main": [
+        [{ "node": "SMS on-call technician", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

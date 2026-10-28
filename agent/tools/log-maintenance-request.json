@@ -1,0 +1,33 @@
+{
+  "type": "function",
+  "function": {
+    "name": "log_maintenance_request",
+    "description": "Log a tenant maintenance request once all details are collected. Returns a ticket number to read back to the caller.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "tenant_name": { "type": "string", "description": "Caller's full name" },
+        "callback_number": { "type": "string", "description": "Best phone number to reach the tenant, confirmed by reading it back" },
+        "property_address": { "type": "string", "description": "Street address of the property" },
+        "unit": { "type": "string", "description": "Unit or apartment number, if any" },
+        "issue_category": {
+          "type": "string",
+          "enum": ["plumbing", "electrical", "hvac", "appliance", "pest", "lockout_security", "structural", "other"]
+        },
+        "issue_description": { "type": "string", "description": "Short summary of the problem, where it is, and when it started" },
+        "urgency": {
+          "type": "string",
+          "enum": ["emergency", "urgent", "routine"],
+          "description": "emergency = safety risk or serious damage; urgent = major issue, no immediate danger; routine = normal repair"
+        },
+        "permission_to_enter": { "type": "boolean", "description": "Whether maintenance may enter if nobody is home" },
+        "pets_on_site": { "type": "string", "description": "Pets in the unit, or 'none'" },
+        "preferred_time": { "type": "string", "description": "Tenant's preferred visit window, for non-emergencies" }
+      },
+      "required": ["tenant_name", "callback_number", "property_address", "issue_category", "issue_description", "urgency"]
+    }
+  },
+  "server": {
+    "url": "https://YOUR-N8N-HOST/webhook/vapi-maintenance-intake"
+  }
+}
